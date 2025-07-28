@@ -1,177 +1,266 @@
-# Trend Micro WFBS Status Check for TRMM
+Trend Micro WFBS Status Monitor for Tactical RMM
 
-A PowerShell script for monitoring Trend Micro Worry-Free Business Security (WFBS) Agent status in Tactical RMM environments.
+A comprehensive monitoring solution for Trend Micro Worry-Free Business Security (WFBS) Agent status in Tactical RMM environments.
+🎯 Features
 
-## Description
+    Real-time Status Monitoring - Checks installation, service status, and real-time protection
+    Signature Age Tracking - Monitors virus definition freshness
+    Health Status Assessment - Provides overall system health evaluation
+    Professional Reporting - Client-specific reports with visual status indicators
+    TRMM Integration - Seamless integration with Tactical RMM custom fields and reporting
+    Single JSON Output - Optimized for TRMM Collector Tasks
 
-This script monitors the health and status of Trend Micro WFBS installations on Windows clients. It provides comprehensive monitoring including:
+📋 Requirements
 
-- Installation status detection
-- Service health monitoring (TMBMServer, TmListen, ntrtscan, tmlisten)
-- Signature age tracking with automatic date parsing
-- Real-time protection status
-- Version information extraction
-- Health status evaluation with CRITICAL/WARNING/OK states
+    Tactical RMM - Latest version with custom fields support
+    Windows Systems - Windows 10/11, Windows Server 2016+
+    PowerShell - Version 5.1 or higher
+    Trend Micro WFBS - Any supported version (tested with 20.0)
+    Administrative Privileges - Required for registry access
 
-## Features
+📁 Project Files
 
-- **Non-invasive**: Read-only operations, safe for production use
-- **TRMM Integration**: Outputs custom variables for TRMM reporting
-- **Robust Parsing**: Handles German Windows localization and various date formats
-- **Comprehensive Monitoring**: Tracks all critical WFBS components
-- **Debug Support**: Optional detailed output for troubleshooting
+    Win_TrendMicro_WFBS_Status_Check.ps1 - Main monitoring script
+    TrendMicro_WFBS_Status_Report_Template.json - TRMM report template
+    trend_micro_data_query.json - Data query definition for reports
 
-## Requirements
+🚀 Installation
+Step 1: Create Custom Field
 
-- Windows operating system
-- PowerShell 5.1 or later
-- Administrative privileges (for registry access)
-- Trend Micro Worry-Free Business Security Agent installed
+    Navigate to Settings → Custom Fields in TRMM
+    Create new custom field:
+        Name: trend_micro_status
+        Model: Agent
+        Type: Text
 
-## Supported Versions
+Step 2: Deploy Monitoring Script
 
-- Trend Micro WFBS Agent 20.0 and later
-- Tested on Windows 10/11 and Windows Server 2016/2019/2022
+    Go to Scripts → Script Manager
+    Create new script:
+        Name: "Trend Micro WFBS Status Monitor"
+        Shell: PowerShell
+        Script Type: Custom
+        Category: Monitoring
+    Copy content from Win_TrendMicro_WFBS_Status_Check.ps1
+    Save script
 
-## Usage
+Step 3: Create Collector Task
 
-### Basic Usage
-```powershell
-.\Win_TrendMicro_WFBS_Status_Check.ps1
-```
-### With Debug Output
-```PowerShell
+    Navigate to Automation Manager → Tasks
+    Create new task:
+        Name: "Collect Trend Micro Status"
+        Type: Script Task
+        Script: Select the monitoring script
+        Custom Field: trend_micro_status
+        Timeout: 300 seconds
+        Run As: SYSTEM
+
+Step 4: Deploy Report Template
+
+    Go to Reporting → Report Templates
+    Create new template:
+        Name: "Trend Micro WFBS Status Report"
+        Template Type: Client Report
+    Import or copy content from TrendMicro_WFBS_Status_Report_Template.json
+    Configure VARIABLES section with trend_micro_data_query.json content
+    Save template
+
+📊 Usage
+Running Collector Tasks
+
+Manual Execution:
+
+    Select agents in Agent Manager
+    Run "Collect Trend Micro Status" task
+    Wait for completion and verify custom field population
+
+Automated Execution:
+
+    Create Automation Policy
+    Add Collector Task with desired schedule (recommended: daily)
+    Apply policy to target agents or clients
+
+Generating Reports
+
+    Navigate to Reporting → Generate Report
+    Select "Trend Micro WFBS Status Report"
+    Choose target client from dropdown
+    Click Generate Report
+    Review results and export if needed
+
+📈 Monitoring Data
+
+The script monitors and reports the following information in JSON format:
+Field 	Description 	Values
+health_status 	Overall system health 	OK, REALTIME_DISABLED, SERVICE_STOPPED, OUTDATED_SIGNATURES, WARNING, NOT_INSTALLED, ERROR
+installed 	Installation status 	1 (installed), 0 (not installed)
+service_running 	Service status 	1 (running), 0 (stopped)
+realtime_protection 	Real-time protection 	1 (enabled), 0 (disabled)
+version 	Trend Micro version 	Version string or "Unknown"
+signature_age 	Days since last update 	Number of days or -1 (unknown)
+last_update 	Last signature update 	Date (YYYY-MM-DD) or "Unknown"
+Health Status Definitions
+
+    OK - All systems operational, signatures current (≤7 days)
+    REALTIME_DISABLED - Installed and running but real-time protection disabled
+    SERVICE_STOPPED - Installed but critical services not running
+    OUTDATED_SIGNATURES - Signatures older than 7 days
+    WARNING - Minor issues detected
+    NOT_INSTALLED - Trend Micro not found on system
+    ERROR - Script execution error occurred
+
+🎨 Report Features
+
+    Color-coded Status Indicators - Visual health assessment at a glance
+    Priority Sorting - Critical issues displayed first
+    Summary Statistics - Overview with percentages
+    Professional Layout - Clean, printable format optimized for landscape
+    Client Filtering - Generate reports per client
+    Last Seen Information - Agent connectivity status
+    Responsive Design - Works well in TRMM interface and exports
+
+🔧 Troubleshooting
+Common Issues
+
+No Data in Reports:
+
+    Verify custom field name matches exactly: trend_micro_status
+    Ensure Collector Task has executed successfully
+    Check script execution logs in TRMM
+    Confirm agents have proper permissions
+
+Script Execution Errors:
+
+    Verify PowerShell execution policy allows script execution
+    Check Windows version compatibility
+    Review TRMM agent logs for detailed error messages
+    Ensure administrative privileges for registry access
+
+Installation Detection Issues:
+
+    Script checks both 32-bit and 64-bit installation paths
+    Registry access requires appropriate permissions
+    Some Trend Micro versions may use different registry locations
+    German Windows localization handled automatically
+
+Report Template Issues:
+
+    Verify VARIABLES section matches trend_micro_data_query.json
+    Ensure client filter is properly configured
+    Check Jinja2 template syntax for any modifications
+
+Debug Mode
+
+Execute the script with -Debug parameter for detailed logging:
+
 .\Win_TrendMicro_WFBS_Status_Check.ps1 -Debug
-```
 
-## TRMM Automated Task
+This provides verbose output including:
 
-1. Upload the script to your TRMM server
-2. Create an Automated Task with the script
-3. Schedule it to run on your desired interval (recommended: daily)
-4. Configure custom fields to capture the output variables
+    Installation path detection
+    Service status details
+    Registry access attempts
+    Signature date parsing
+    Final health status calculation
 
-### Output
+Registry Locations
 
-The script outputs both human-readable status information and TRMM custom variables:
+The script checks multiple registry paths for maximum compatibility:
 
-### Status Information
-```
-=== Trend Micro WFBS Status ===
-Installed: True
-Service_Running: True
-Version: 20.0
-Signature_Age_Days: 0.5
-Last_Update: 2025-07-28
-RealTime_Protection: Enabled
-``` 
-### TRMM Custom Variables
-```
-=== TRMM Custom Variables ===
-tm_installed=1
-tm_service_running=1
-tm_version=20.0
-tm_signature_age=0.5
-tm_last_update=2025-07-28
-tm_realtime_protection=1
-tm_health_status=OK
-```
-### Custom Variables Reference
+Version Information:
 
-| Variable | Type | Description |
-|----------|------|-------------|
-| `tm_installed` | Number | 1 if WFBS is installed, 0 if not |
-| `tm_service_running` | Number | 1 if all services are running, 0 if not |
-| `tm_version` | Text | WFBS Agent version (e.g., "20.0") |
-| `tm_signature_age` | Number | Age of virus signatures in days |
-| `tm_last_update` | Text | Date of last signature update |
-| `tm_realtime_protection` | Number | 1 if real-time protection is enabled, 0 if not |
-| `tm_health_status` | Text | Overall health: OK/WARNING/CRITICAL/NOT_INSTALLED |
+    HKLM:\SOFTWARE\WOW6432Node\TrendMicro\PC-cillinNTCorp\CurrentVersion
+    HKLM:\SOFTWARE\TrendMicro\PC-cillinNTCorp\CurrentVersion
 
-### Health Status Logic
-- OK: All services running, signatures < 7 days old, real-time protection enabled
-- WARNING: Signatures > 7 days old OR real-time protection disabled
-- CRITICAL: Required services not running
-- NOT_INSTALLED: WFBS Agent not detected
+Real-time Protection:
 
-# TRMM Setup
+    HKLM:\SOFTWARE\WOW6432Node\TrendMicro\PC-cillinNTCorp\CurrentVersion\Real Time Scan Configuration
+    HKLM:\SOFTWARE\TrendMicro\PC-cillinNTCorp\CurrentVersion\Real Time Scan Configuration
 
-## 1.  Import Script
+Signature Information:
 
-Upload the Script Win_TrendMicro_WFBS_Status_Check.ps1
+    HKLM:\SOFTWARE\WOW6432Node\TrendMicro\PC-cillinNTCorp\CurrentVersion\Internet Settings
+    HKLM:\SOFTWARE\TrendMicro\PC-cillinNTCorp\CurrentVersion\Internet Settings
 
+📝 Customization
+Modifying Health Thresholds
 
-## 2. Custom Fields Configuration
+Edit the health status logic in Win_TrendMicro_WFBS_Status_Check.ps1:
 
-Create these custom fields in TRMM for your clients:
-| Field | Type | Description |
-|----------|------|-------------|
-| `tm_installed` | Number | 1 if WFBS is installed, 0 if not |
-| `tm_service_running` | Number | 1 if all services are running, 0 if not |
-| `tm_version` | Text | WFBS Agent version (e.g., "20.0") |
-| `tm_signature_age` | Number | Age of virus signatures in days |
-| `tm_last_update` | Text | Date of last signature update |
-| `tm_realtime_protection` | Number | 1 if real-time protection is enabled, 0 if not |
-| `tm_health_status` | Text | Overall health: OK/WARNING/CRITICAL/NOT_INSTALLED |
+# Signature age threshold (default: 7 days)
+if ($Status.signature_age -le 7) {
+    # Considered current
+}
 
-## 3. Automated Task Setup
+Adding Custom Monitoring
 
-1. Navigate to Automation Manager → Automated Tasks
-2. Create a new task with these settings:
-    - Name: "Trend Micro WFBS Status Check"
-    - Script: Win_TrendMicro_WFBS_Status_Check.ps1
-    - Schedule: Daily at preferred time
-    - Timeout: 300 seconds
-    - Enabled: Yes
+Extend the script with additional checks:
 
-## 4. Policy Assignment
+# Add custom registry checks
+$CustomReg = Get-ItemProperty -Path &quot;HKLM:\SOFTWARE\...&quot; -ErrorAction SilentlyContinue
 
-Assign the automated task to:
-- All Windows clients with WFBS installed
-- Workstation policies (exclude servers if not applicable)
+# Add to status object
+$Status.custom_field = $CustomValue
 
-# Troubleshooting
-## Common Issues
+Report Customization
 
-Script returns "Unknown" values:
-- Verify administrative privileges
-- Check if WFBS is properly installed
-- Run with -Debug parameter for detailed information
+Modify the report template to:
 
-Signature age shows -1:
-- Registry paths may differ for older WFBS versions
-- Check Windows Event Log for WFBS update errors
-- Verify WFBS can connect to update servers
+    Change color schemes
+    Add additional columns
+    Modify sorting logic
+    Customize summary statistics
+    Add company branding
 
-Services not detected:
-- Ensure WFBS services are installed and started
-- Check Windows Services console for service status
-- Verify WFBS installation integrity
+🤝 Contributing
 
-# Debug Mode
+    Fork the repository
+    Create feature branch (git checkout -b feature/AmazingFeature)
+    Make changes and test thoroughly
+    Commit changes (git commit -m 'Add AmazingFeature')
+    Push to branch (git push origin feature/AmazingFeature)
+    Submit pull request
 
-Run the script with -Debug parameter to get detailed information about:
-- Registry path accessibility
-- Service enumeration
-- Date parsing results
+Development Guidelines
 
-# Contributing
+    Follow PowerShell best practices
+    Maintain backward compatibility
+    Add appropriate error handling
+    Update documentation for new features
+    Test on multiple Windows versions
+    Verify TRMM integration compatibility
 
-Contributions are welcome! Please ensure:
-- Follow PowerShell best practices
-- Test on multiple WFBS versions
-- Update documentation for new features
-- Maintain backward compatibility
+📄 License
 
-# License
+This project is licensed under the GPLv3 License - see the LICENSE file for details.
+🆘 Support
 
-This project is licensed under the GNU General Public License v3.0 - see the LICENSE file for details.
+    Issues: Report bugs and feature requests via GitHub Issues
+    Documentation: Check TRMM documentation for platform-specific guidance
+    Community: Join TRMM Discord for community support
+    Security: Report security issues privately via email
 
-# Author
-somnium78 (Marc)
-- Created for TRMM Community Scripts
-- Version 1.0 - July 28, 2025
+🔄 Version History
 
-# Disclaimer
+    v1.0 - Initial release with comprehensive monitoring and reporting
+        Single JSON output for TRMM compatibility
+        Professional report template with client filtering
+        Comprehensive health status assessment
+        German Windows localization support
 
-This software is provided "as is" without warranty of any kind. Use at your own risk. Always test in a non-production environment first.
+🙏 Acknowledgments
+
+    Tactical RMM Team - For the excellent RMM platform and community support
+    Trend Micro - For comprehensive security solutions and documentation
+    Community Contributors - For testing, feedback, and feature suggestions
+    somnium78 - Original author and maintainer
+
+📞 Author
+
+somnium78
+
+    GitHub: @somnium78
+    Project: Trend Micro WFBS Status Monitor for TRMM
+    Date: July 28, 2025
+
+This project is not affiliated with or endorsed by Trend Micro Inc. or Amidaware (Tactical RMM). All trademarks are property of their respective owners.
