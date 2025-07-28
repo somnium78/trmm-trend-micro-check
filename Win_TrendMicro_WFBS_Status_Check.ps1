@@ -3,8 +3,8 @@
     Monitors Trend Micro Worry-Free Business Security Agent status for TRMM integration.
 .DESCRIPTION
     This script checks the installation status, service health, signature age, and real-time protection
-    status of Trend Micro WFBS Agent. It outputs TRMM-compatible custom variables for monitoring
-    and reporting purposes. The script is designed to be non-invasive and safe for production use.
+    status of Trend Micro WFBS Agent. It outputs a single JSON string for TRMM custom field storage.
+    The script is designed to be non-invasive and safe for production use.
 .PARAMETER Debug
     Enable debug output showing detailed service information.
 .AUTHOR
@@ -15,196 +15,199 @@
     1.0
 .EXAMPLE
     .\Win_TrendMicro_WFBS_Status_Check.ps1
-    This command checks the Trend Micro WFBS status and outputs TRMM custom variables.
+    This command checks the Trend Micro WFBS status and outputs JSON for TRMM custom field.
 .EXAMPLE
     .\Win_TrendMicro_WFBS_Status_Check.ps1 -Debug
     This command runs the check with debug output enabled.
 .NOTES
     - Requires administrative privileges for registry access
     - Compatible with Trend Micro WFBS Agent 20.0 and later
-    - Outputs numerical values for TRMM custom fields (1/0 instead of true/false)
+    - Outputs single JSON string for TRMM Collector Task compatibility
     - Handles German Windows localization issues with DateTime parsing
     - Safe for production use - read-only operations only
 .OUTPUTS
-    TRMM Custom Variables:
-    - tm_installed: 1 if installed, 0 if not
-    - tm_service_running: 1 if services running, 0 if not  
-    - tm_version: WFBS version string
-    - tm_signature_age: Age of signatures in days (decimal)
-    - tm_last_update: Last signature update date
-    - tm_realtime_protection: 1 if enabled, 0 if disabled
-    - tm_health_status: OK/WARNING/CRITICAL/NOT_INSTALLED
+    Single JSON string containing:
+    - health_status: OK/REALTIME_DISABLED/SERVICE_STOPPED/OUTDATED_SIGNATURES/WARNING/NOT_INSTALLED/ERROR
+    - installed: 1 if installed, 0 if not
+    - service_running: 1 if services running, 0 if not  
+    - version: WFBS version string or "Unknown"
+    - signature_age: Age of signatures in days (decimal) or -1 if unknown
+    - last_update: Last signature update date (YYYY-MM-DD) or "Unknown"
+    - realtime_protection: 1 if enabled, 0 if disabled
 #>
 
 param(
     [switch]$Debug
 )
 
-# TRMM Community Script: Trend Micro WFBS Status Check
-# Version: 1.0
-# Author: somnium78
-# License: GPL v3
-
-$ErrorActionPreference = "SilentlyContinue"
-
-# Initialize result object
-$Result = @{
-    Installed = $false
-    ServiceRunning = $false
-    Version = "Unknown"
-    SignatureAge = -1
-    LastUpdate = "Unknown"
-    RealTimeProtection = "Unknown"
-}
-
-# 1. Check service status
-$ServiceNames = @("TMBMServer", "TmListen", "ntrtscan", "tmlisten")
-$RunningServices = @()
-
-foreach ($ServiceName in $ServiceNames) {
-    $Service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-    if ($Service) {
-        $RunningServices += @{
-            Name = $ServiceName
-            Status = $Service.Status
-        }
-        if ($Service.Status -eq "Running") {
-            $Result.ServiceRunning = $true
-        }
+try {
+    # Initialize status object
+    $Status = @{
+        health_status = "UNKNOWN"
+        version = "Unknown"
+        installed = 0
+        service_running = 0
+        last_update = "Unknown"
+        signature_age = -1
+        realtime_protection = 0
     }
-}
 
-# 2. Check installation and version from registry
-$RegPath = "HKLM:\SOFTWARE\WOW6432Node\TrendMicro\PC-cillinNTCorp\CurrentVersion"
-if (Test-Path $RegPath) {
-    $Result.Installed = $true
-    $RegData = Get-ItemProperty -Path $RegPath -ErrorAction SilentlyContinue
-
-    if ($RegData.WFBSAgentVersion) { 
-        $Result.Version = $RegData.WFBSAgentVersion
+    if ($Debug) {
+        Write-Host "Starting Trend Micro WFBS status check..." -ForegroundColor Green
     }
-}
 
-# 3. Get signature information from registry
-$MiscRegPath = "HKLM:\SOFTWARE\WOW6432Node\TrendMicro\PC-cillinNTCorp\CurrentVersion\Misc."
-if (Test-Path $MiscRegPath) {
-    $MiscData = Get-ItemProperty -Path $MiscRegPath -ErrorAction SilentlyContinue
+    # Check if Trend Micro is installed
+    $TrendMicroPath = "C:\Program Files (x86)\Trend Micro\Security Agent"
+    $TrendMicroPath64 = "C:\Program Files\Trend Micro\Security Agent"
 
-    # Process pattern date (YYYYMMDD format)
-    if ($MiscData.PatternDate) {
+    $InstallPath = $null
+    if (Test-Path $TrendMicroPath) {
+        $InstallPath = $TrendMicroPath
+        $Status.installed = 1
+        if ($Debug) { Write-Host "Found Trend Micro at: $TrendMicroPath" -ForegroundColor Yellow }
+    } elseif (Test-Path $TrendMicroPath64) {
+        $InstallPath = $TrendMicroPath64
+        $Status.installed = 1
+        if ($Debug) { Write-Host "Found Trend Micro at: $TrendMicroPath64" -ForegroundColor Yellow }
+    } else {
+        if ($Debug) { Write-Host "Trend Micro not found in standard paths" -ForegroundColor Red }
+    }
+
+    if ($Status.installed -eq 1) {
+        # Get version information
         try {
-            $PatternDateStr = $MiscData.PatternDate.ToString()
-            if ($PatternDateStr.Length -eq 8 -and $PatternDateStr -match '^\d{8}$') {
-                $Year = [int]$PatternDateStr.Substring(0,4)
-                $Month = [int]$PatternDateStr.Substring(4,2)
-                $Day = [int]$PatternDateStr.Substring(6,2)
+            $VersionReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\TrendMicro\PC-cillinNTCorp\CurrentVersion" -ErrorAction SilentlyContinue
+            if (!$VersionReg) {
+                $VersionReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\TrendMicro\PC-cillinNTCorp\CurrentVersion" -ErrorAction SilentlyContinue
+            }
 
-                $PatternDate = New-Object DateTime($Year, $Month, $Day)
-                $CurrentDate = [DateTime]::Now
-                $TimeSpan = $CurrentDate - $PatternDate
-                $Result.SignatureAge = [Math]::Round($TimeSpan.TotalDays, 1)
-                $Result.LastUpdate = $PatternDate.ToString("yyyy-MM-dd")
+            if ($VersionReg -and $VersionReg.Version) {
+                $Status.version = $VersionReg.Version
+                if ($Debug) { Write-Host "Version: $($Status.version)" -ForegroundColor Yellow }
             }
         } catch {
-            # Fallback: Use Unix timestamp
-            if ($MiscData.LastUpdateTime) {
-                try {
-                    $UnixTime = [int64]$MiscData.LastUpdateTime
-                    $UnixEpoch = New-Object DateTime(1970, 1, 1, 0, 0, 0, [DateTimeKind]::Utc)
-                    $UpdateDate = $UnixEpoch.AddSeconds($UnixTime).ToLocalTime()
+            if ($Debug) { Write-Host "Version detection failed: $($_.Exception.Message)" -ForegroundColor Red }
+        }
 
-                    $CurrentDate = [DateTime]::Now
-                    $TimeSpan = $CurrentDate - $UpdateDate
-                    $Result.SignatureAge = [Math]::Round($TimeSpan.TotalDays, 1)
-                    $Result.LastUpdate = $UpdateDate.ToString("yyyy-MM-dd HH:mm:ss")
-                } catch {
-                    # Ignore parsing errors
+        # Check critical services
+        $Services = @("TMBMServer", "TmListen", "ntrtscan", "tmlisten")
+        $RunningServices = 0
+
+        foreach ($ServiceName in $Services) {
+            $Service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+            if ($Service -and $Service.Status -eq "Running") {
+                $RunningServices++
+                if ($Debug) { Write-Host "Service $ServiceName: Running" -ForegroundColor Green }
+            } elseif ($Service) {
+                if ($Debug) { Write-Host "Service $ServiceName: $($Service.Status)" -ForegroundColor Red }
+            }
+        }
+
+        if ($RunningServices -gt 0) {
+            $Status.service_running = 1
+        }
+
+        if ($Debug) { Write-Host "Running services: $RunningServices/$($Services.Count)" -ForegroundColor Yellow }
+
+        # Check real-time protection status
+        try {
+            $RealtimeReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\TrendMicro\PC-cillinNTCorp\CurrentVersion\Real Time Scan Configuration" -ErrorAction SilentlyContinue
+            if (!$RealtimeReg) {
+                $RealtimeReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\TrendMicro\PC-cillinNTCorp\CurrentVersion\Real Time Scan Configuration" -ErrorAction SilentlyContinue
+            }
+
+            if ($RealtimeReg -and $RealtimeReg.RealTimeScanOn -eq 1) {
+                $Status.realtime_protection = 1
+                if ($Debug) { Write-Host "Real-time protection: Enabled" -ForegroundColor Green }
+            } else {
+                if ($Debug) { Write-Host "Real-time protection: Disabled" -ForegroundColor Red }
+            }
+        } catch {
+            if ($Debug) { Write-Host "Real-time protection check failed: $($_.Exception.Message)" -ForegroundColor Red }
+        }
+
+        # Get signature information
+        try {
+            $PatternReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\TrendMicro\PC-cillinNTCorp\CurrentVersion\Internet Settings" -ErrorAction SilentlyContinue
+            if (!$PatternReg) {
+                $PatternReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\TrendMicro\PC-cillinNTCorp\CurrentVersion\Internet Settings" -ErrorAction SilentlyContinue
+            }
+
+            if ($PatternReg) {
+                # Try to get pattern date
+                if ($PatternReg.PatternDate) {
+                    try {
+                        $PatternDate = [DateTime]::ParseExact($PatternReg.PatternDate, "yyyyMMdd", $null)
+                        $Status.last_update = $PatternDate.ToString("yyyy-MM-dd")
+                        $Status.signature_age = [math]::Round(((Get-Date) - $PatternDate).TotalDays, 1)
+                        if ($Debug) { Write-Host "Pattern date: $($Status.last_update) (Age: $($Status.signature_age) days)" -ForegroundColor Yellow }
+                    } catch {
+                        if ($Debug) { Write-Host "Pattern date parsing failed: $($_.Exception.Message)" -ForegroundColor Red }
+                    }
+                }
+
+                # Alternative: Try LastUpdateTime
+                if ($Status.last_update -eq "Unknown" -and $PatternReg.LastUpdateTime) {
+                    try {
+                        $UpdateTime = [DateTime]::FromFileTime($PatternReg.LastUpdateTime)
+                        $Status.last_update = $UpdateTime.ToString("yyyy-MM-dd")
+                        $Status.signature_age = [math]::Round(((Get-Date) - $UpdateTime).TotalDays, 1)
+                        if ($Debug) { Write-Host "Last update time: $($Status.last_update) (Age: $($Status.signature_age) days)" -ForegroundColor Yellow }
+                    } catch {
+                        if ($Debug) { Write-Host "LastUpdateTime parsing failed: $($_.Exception.Message)" -ForegroundColor Red }
+                    }
                 }
             }
+        } catch {
+            if ($Debug) { Write-Host "Signature information check failed: $($_.Exception.Message)" -ForegroundColor Red }
         }
-    }
-}
 
-# 4. Alternative: UpdateInfo registry (fallback)
-if ($Result.SignatureAge -lt 0) {
-    $UpdateInfoPath = "HKLM:\SOFTWARE\WOW6432Node\TrendMicro\PC-cillinNTCorp\CurrentVersion\UpdateInfo"
-    if (Test-Path $UpdateInfoPath) {
-        $UpdateData = Get-ItemProperty -Path $UpdateInfoPath -ErrorAction SilentlyContinue
-        if ($UpdateData.LastUpdate) {
-            try {
-                $UnixTime = [int64]$UpdateData.LastUpdate
-                $UnixEpoch = New-Object DateTime(1970, 1, 1, 0, 0, 0, [DateTimeKind]::Utc)
-                $UpdateDate = $UnixEpoch.AddSeconds($UnixTime).ToLocalTime()
-
-                $CurrentDate = [DateTime]::Now
-                $TimeSpan = $CurrentDate - $UpdateDate
-                $Result.SignatureAge = [Math]::Round($TimeSpan.TotalDays, 1)
-                $Result.LastUpdate = $UpdateDate.ToString("yyyy-MM-dd HH:mm:ss")
-            } catch {
-                # Ignore parsing errors
-            }
+        # Determine overall health status
+        if ($Status.service_running -eq 1 -and $Status.realtime_protection -eq 1 -and $Status.signature_age -le 7) {
+            $Status.health_status = "OK"
+        } elseif ($Status.service_running -eq 1 -and $Status.realtime_protection -eq 0) {
+            $Status.health_status = "REALTIME_DISABLED"
+        } elseif ($Status.service_running -eq 0) {
+            $Status.health_status = "SERVICE_STOPPED"
+        } elseif ($Status.signature_age -gt 7) {
+            $Status.health_status = "OUTDATED_SIGNATURES"
+        } else {
+            $Status.health_status = "WARNING"
         }
-    }
-}
-
-# 5. Check Real-Time Protection status
-$RealTimeServices = @("ntrtscan", "tmlisten")
-$RTRunning = $false
-foreach ($RTService in $RealTimeServices) {
-    $Service = Get-Service -Name $RTService -ErrorAction SilentlyContinue
-    if ($Service -and $Service.Status -eq "Running") {
-        $RTRunning = $true
-        break
-    }
-}
-$Result.RealTimeProtection = if ($RTRunning) { "Enabled" } else { "Disabled" }
-
-# 6. Output TRMM-compatible results
-Write-Output "=== Trend Micro WFBS Status ==="
-Write-Output "Installed: $($Result.Installed)"
-Write-Output "Service_Running: $($Result.ServiceRunning)"
-Write-Output "Version: $($Result.Version)"
-Write-Output "Signature_Age_Days: $($Result.SignatureAge)"
-Write-Output "Last_Update: $($Result.LastUpdate)"
-Write-Output "RealTime_Protection: $($Result.RealTimeProtection)"
-
-# 7. TRMM Custom Variables
-if ($Result.Installed) {
-    Write-Output ""
-    Write-Output "=== TRMM Custom Variables ==="
-    Write-Output "tm_installed=1"
-    Write-Output "tm_service_running=$(if($Result.ServiceRunning) { 1 } else { 0 })"
-    Write-Output "tm_version=$($Result.Version)"
-    Write-Output "tm_signature_age=$($Result.SignatureAge)"
-    Write-Output "tm_last_update=$($Result.LastUpdate)"
-    Write-Output "tm_realtime_protection=$(if($Result.RealTimeProtection -eq 'Enabled') { 1 } else { 0 })"
-
-    # Evaluate health status
-    $HealthStatus = "OK"
-    if (-not $Result.ServiceRunning) { 
-        $HealthStatus = "CRITICAL" 
-    } elseif ($Result.SignatureAge -gt 7 -and $Result.SignatureAge -ge 0) { 
-        $HealthStatus = "WARNING" 
-    } elseif ($Result.RealTimeProtection -eq "Disabled") { 
-        $HealthStatus = "WARNING" 
+    } else {
+        # Trend Micro not installed
+        $Status.health_status = "NOT_INSTALLED"
+        if ($Debug) { Write-Host "Final status: NOT_INSTALLED" -ForegroundColor Red }
     }
 
-    Write-Output "tm_health_status=$HealthStatus"
-} else {
-    Write-Output ""
-    Write-Output "=== TRMM Custom Variables ==="
-    Write-Output "tm_installed=0"
-    Write-Output "tm_health_status=NOT_INSTALLED"
-}
-
-# 8. Debug output (optional)
-if ($Debug) {
-    Write-Output ""
-    Write-Output "=== Debug Information ==="
-    Write-Output "Registry Path Exists: $(Test-Path $RegPath)"
-    Write-Output "Misc Registry Path Exists: $(Test-Path $MiscRegPath)"
-    Write-Output "Running Services:"
-    foreach ($Svc in $RunningServices) {
-        Write-Output "  $($Svc.Name): $($Svc.Status)"
+    if ($Debug) {
+        Write-Host "Final health status: $($Status.health_status)" -ForegroundColor Cyan
+        Write-Host "Status object:" -ForegroundColor Cyan
+        $Status | ConvertTo-Json | Write-Host
     }
+
+    # Output JSON for TRMM custom field (single line)
+    $JsonOutput = $Status | ConvertTo-Json -Compress
+    Write-Output $JsonOutput
+
+} catch {
+    # Error occurred - output error status
+    $ErrorStatus = @{
+        health_status = "ERROR"
+        version = "Unknown"
+        installed = 0
+        service_running = 0
+        last_update = "Unknown"
+        signature_age = -1
+        realtime_protection = 0
+        error = $_.Exception.Message
+    }
+
+    if ($Debug) {
+        Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "Stack Trace: $($_.ScriptStackTrace)" -ForegroundColor Red
+    }
+
+    $ErrorJson = $ErrorStatus | ConvertTo-Json -Compress
+    Write-Output $ErrorJson
 }
