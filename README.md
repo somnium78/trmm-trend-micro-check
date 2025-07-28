@@ -1,92 +1,90 @@
-Trend Micro WFBS Status Monitor for Tactical RMM
+# Trend Micro WFBS Status Monitor for Tactical RMM
 
 A comprehensive monitoring solution for Trend Micro Worry-Free Business Security (WFBS) Agent status in Tactical RMM environments.
+
 🎯 Features
 
-    Real-time Status Monitoring - Checks installation, service status, and real-time protection
-    Signature Age Tracking - Monitors virus definition freshness
-    Health Status Assessment - Provides overall system health evaluation
-    Professional Reporting - Client-specific reports with visual status indicators
-    TRMM Integration - Seamless integration with Tactical RMM custom fields and reporting
-    Single JSON Output - Optimized for TRMM Collector Tasks
+- Real-time Status Monitoring - Checks installation, service status, and real-time protection
+- Signature Age Tracking - Monitors virus definition freshness
+- Health Status Assessment - Provides overall system health evaluation
+- Professional Reporting - Client-specific reports with visual status indicators
+- TRMM Integration - Seamless integration with Tactical RMM custom fields and reporting
+- Single JSON Output - Optimized for TRMM Collector Tasks
 
 📋 Requirements
 
-    Tactical RMM - Latest version with custom fields support
-    Windows Systems - Windows 10/11, Windows Server 2016+
-    PowerShell - Version 5.1 or higher
-    Trend Micro WFBS - Any supported version (tested with 20.0)
-    Administrative Privileges - Required for registry access
+- Tactical RMM - Latest version with custom fields support
+- Windows Systems - Windows 10/11, Windows Server 2016+
+- PowerShell - Version 5.1 or higher
+- Trend Micro WFBS - Any supported version (tested with 20.0)
+- Administrative Privileges - Required for registry access
 
 📁 Project Files
 
-    Win_TrendMicro_WFBS_Status_Check.ps1 - Main monitoring script
-    TrendMicro_WFBS_Status_Report_Template.json - TRMM report template
-    trend_micro_data_query.json - Data query definition for reports
+- Win_TrendMicro_WFBS_Status_Check.ps1 - Main monitoring script
+- TrendMicro_WFBS_Status_Report_Template.json - TRMM report template
+- trend_micro_data_query.json - Data query definition for reports
 
 🚀 Installation
 Step 1: Create Custom Field
 
-    Navigate to Settings → Custom Fields in TRMM
-    Create new custom field:
-        Name: trend_micro_status
-        Model: Agent
-        Type: Text
+Navigate to Settings → Custom Fields in TRMM
+Create new custom field:
+   Name: trend_micro_status
+   Model: Agent
+   Type: Text
 
 Step 2: Deploy Monitoring Script
 
-    Go to Scripts → Script Manager
-    Create new script:
-        Name: "Trend Micro WFBS Status Monitor"
-        Shell: PowerShell
-        Script Type: Custom
-        Category: Monitoring
-    Copy content from Win_TrendMicro_WFBS_Status_Check.ps1
-    Save script
+Go to Scripts → Script Manager
+Create new script:
+    Name: "Trend Micro WFBS Status Monitor"
+    Shell: PowerShell
+    Script Type: Custom
+    Category: Monitoring
+Copy content from Win_TrendMicro_WFBS_Status_Check.ps1
+Save script
 
 Step 3: Create Collector Task
 
-    Navigate to Automation Manager → Tasks
-    Create new task:
-        Name: "Collect Trend Micro Status"
-        Type: Script Task
-        Script: Select the monitoring script
-        Custom Field: trend_micro_status
-        Timeout: 300 seconds
-        Run As: SYSTEM
+Navigate to Automation Manager → Tasks
+Create new task:
+    Name: "Collect Trend Micro Status"
+    Type: Script Task
+    Script: Select the monitoring script
+    Custom Field: trend_micro_status
+    Timeout: 300 seconds
+    Run As: SYSTEM
 
 Step 4: Deploy Report Template
 
-    Go to Reporting → Report Templates
-    Create new template:
-        Name: "Trend Micro WFBS Status Report"
-        Template Type: Client Report
-    Import or copy content from TrendMicro_WFBS_Status_Report_Template.json
-    Configure VARIABLES section with trend_micro_data_query.json content
-    Save template
+Go to Reporting → Report Templates
+Create new template:
+   Name: "Trend Micro WFBS Status Report"
+   Template Type: Client Report
+Import or copy content from TrendMicro_WFBS_Status_Report_Template.json
+Configure VARIABLES section with trend_micro_data_query.json content
+Save template
 
 📊 Usage
 Running Collector Tasks
 
 Manual Execution:
-
-    Select agents in Agent Manager
-    Run "Collect Trend Micro Status" task
-    Wait for completion and verify custom field population
+- Select agents in Agent Manager
+- Run "Collect Trend Micro Status" task
+- Wait for completion and verify custom field population
 
 Automated Execution:
+- Create Automation Policy
+- Add Collector Task with desired schedule (recommended: daily)
+- Apply policy to target agents or clients
+- Generating Reports
 
-    Create Automation Policy
-    Add Collector Task with desired schedule (recommended: daily)
-    Apply policy to target agents or clients
-
-Generating Reports
-
-    Navigate to Reporting → Generate Report
-    Select "Trend Micro WFBS Status Report"
-    Choose target client from dropdown
-    Click Generate Report
-    Review results and export if needed
+- Navigate to Reporting → Generate Report
+- Select "Trend Micro WFBS Status Report"
+- Choose target client from dropdown
+- Click Generate Report
+- Review results and export if needed
 
 📈 Monitoring Data
 
@@ -99,6 +97,7 @@ realtime_protection 	Real-time protection 	1 (enabled), 0 (disabled)
 version 	Trend Micro version 	Version string or "Unknown"
 signature_age 	Days since last update 	Number of days or -1 (unknown)
 last_update 	Last signature update 	Date (YYYY-MM-DD) or "Unknown"
+
 Health Status Definitions
 
     OK - All systems operational, signatures current (≤7 days)
