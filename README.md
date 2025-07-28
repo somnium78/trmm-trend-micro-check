@@ -55,7 +55,7 @@ This script monitors the health and status of Trend Micro WFBS installations on 
 
 The script outputs both human-readable status information and TRMM custom variables:
 
-###Status Information
+### Status Information
 ```
 === Trend Micro WFBS Status ===
 Installed: True
