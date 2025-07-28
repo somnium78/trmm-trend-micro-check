@@ -78,14 +78,15 @@ tm_health_status=OK
 ```
 ### Custom Variables Reference
 
-Variable 	Type 	Description
-tm_installed 	Number 	1 if WFBS is installed, 0 if not
-tm_service_running 	Number 	1 if all services are running, 0 if not
-tm_version 	Text 	WFBS Agent version (e.g., "20.0")
-tm_signature_age 	Number 	Age of virus signatures in days
-tm_last_update 	Text 	Date of last signature update
-tm_realtime_protection 	Number 	1 if real-time protection is enabled, 0 if not
-tm_health_status 	Text 	Overall health: OK/WARNING/CRITICAL/NOT_INSTALLED
+| Variable | Type | Description |
+|----------|------|-------------|
+| `tm_installed` | Number | 1 if WFBS is installed, 0 if not |
+| `tm_service_running` | Number | 1 if all services are running, 0 if not |
+| `tm_version` | Text | WFBS Agent version (e.g., "20.0") |
+| `tm_signature_age` | Number | Age of virus signatures in days |
+| `tm_last_update` | Text | Date of last signature update |
+| `tm_realtime_protection` | Number | 1 if real-time protection is enabled, 0 if not |
+| `tm_health_status` | Text | Overall health: OK/WARNING/CRITICAL/NOT_INSTALLED |
 
 ### Health Status Logic
 - OK: All services running, signatures < 7 days old, real-time protection enabled
