@@ -2,7 +2,7 @@
 
 A comprehensive monitoring solution for Trend Micro Worry-Free Business Security (WFBS) Agent status in Tactical RMM environments.
 
-🎯 Features
+# 🎯 Features
 
 - Real-time Status Monitoring - Checks installation, service status, and real-time protection
 - Signature Age Tracking - Monitors virus definition freshness
@@ -11,7 +11,7 @@ A comprehensive monitoring solution for Trend Micro Worry-Free Business Security
 - TRMM Integration - Seamless integration with Tactical RMM custom fields and reporting
 - Single JSON Output - Optimized for TRMM Collector Tasks
 
-📋 Requirements
+# 📋 Requirements
 
 - Tactical RMM - Latest version with custom fields support
 - Windows Systems - Windows 10/11, Windows Server 2016+
@@ -19,13 +19,13 @@ A comprehensive monitoring solution for Trend Micro Worry-Free Business Security
 - Trend Micro WFBS - Any supported version (tested with 20.0)
 - Administrative Privileges - Required for registry access
 
-📁 Project Files
+# 📁 Project Files
 
 - Win_TrendMicro_WFBS_Status_Check.ps1 - Main monitoring script
 - TrendMicro_WFBS_Status_Report_Template.json - TRMM report template
 - trend_micro_data_query.json - Data query definition for reports
 
-🚀 Installation
+# 🚀 Installation
 Step 1: Create Custom Field
 - Navigate to Settings → Custom Fields in TRMM
 - Create new custom field:
@@ -62,8 +62,8 @@ Step 4: Deploy Report Template
 - Configure VARIABLES section with trend_micro_data_query.json content
 - Save template
 
-📊 Usage
-Running Collector Tasks
+# 📊 Usage
+## Running Collector Tasks
 
 Manual Execution:
 - Select agents in Agent Manager
@@ -82,7 +82,7 @@ Automated Execution:
 - Click Generate Report
 - Review results and export if needed
 
-📈 Monitoring Data
+# 📈 Monitoring Data
 
 The script monitors and reports the following information in JSON format:
 | Field | Description | Values |
@@ -95,7 +95,7 @@ The script monitors and reports the following information in JSON format:
 | signature_age | Days since last update | Number of days or -1 (unknown) |
 | last_update | Last signature update | Date (YYYY-MM-DD) or "Unknown" |
 
-Health Status Definitions
+## Health Status Definitions
 
 - OK - All systems operational, signatures current (≤7 days)
 - REALTIME_DISABLED - Installed and running but real-time protection disabled
@@ -105,7 +105,7 @@ Health Status Definitions
 - NOT_INSTALLED - Trend Micro not found on system
 - ERROR - Script execution error occurred
 
-🎨 Report Features
+# 🎨 Report Features
 
 - Color-coded Status Indicators - Visual health assessment at a glance
 - Priority Sorting - Critical issues displayed first
@@ -116,7 +116,7 @@ Health Status Definitions
 - Responsive Design - Works well in TRMM interface and exports
 
 
-## Debug Mode
+# Debug Mode
 
 Execute the script with -Debug parameter for detailed logging:
 
@@ -130,7 +130,7 @@ This provides verbose output including:
 - Signature date parsing
 - Final health status calculation
 
-## Registry Locations
+# Registry Locations
 
 The script checks multiple registry paths for maximum compatibility:
 
@@ -150,18 +150,18 @@ Signature Information:
 - HKLM:\SOFTWARE\TrendMicro\PC-cillinNTCorp\CurrentVersion\Internet Settings
 
 
-
-📄 License
+# 📄 License
 
 This project is licensed under the GPLv3 License - see the LICENSE file for details.
-🆘 Support
+
+# 🆘 Support
 
 - Issues: Report bugs and feature requests via GitHub Issues
 - Documentation: Check TRMM documentation for platform-specific guidance
 - Community: Join TRMM Discord for community support
 - Security: Report security issues privately via email
 
-🔄 Version History
+# 🔄 Version History
 
 - v1.0 - Initial release with comprehensive monitoring and reporting
    - Single JSON output for TRMM compatibility
@@ -169,7 +169,7 @@ This project is licensed under the GPLv3 License - see the LICENSE file for deta
    - Comprehensive health status assessment
    - German Windows localization support
 
-📞 Author
+# 📞 Author
 
 somnium78
 - GitHub: @somnium78
