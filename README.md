@@ -93,3 +93,85 @@ tm_health_status=OK
 - WARNING: Signatures > 7 days old OR real-time protection disabled
 - CRITICAL: Required services not running
 - NOT_INSTALLED: WFBS Agent not detected
+
+# TRMM Setup
+
+## 1.  Import Script
+
+Upload the Script Win_TrendMicro_WFBS_Status_Check.ps1
+
+
+## 2. Custom Fields Configuration
+
+Create these custom fields in TRMM for your clients:
+| Field | Type | Description |
+|----------|------|-------------|
+| `tm_installed` | Number | 1 if WFBS is installed, 0 if not |
+| `tm_service_running` | Number | 1 if all services are running, 0 if not |
+| `tm_version` | Text | WFBS Agent version (e.g., "20.0") |
+| `tm_signature_age` | Number | Age of virus signatures in days |
+| `tm_last_update` | Text | Date of last signature update |
+| `tm_realtime_protection` | Number | 1 if real-time protection is enabled, 0 if not |
+| `tm_health_status` | Text | Overall health: OK/WARNING/CRITICAL/NOT_INSTALLED |
+
+## 3. Automated Task Setup
+
+1. Navigate to Automation Manager → Automated Tasks
+2. Create a new task with these settings:
+    - Name: "Trend Micro WFBS Status Check"
+    - Script: Win_TrendMicro_WFBS_Status_Check.ps1
+    - Schedule: Daily at preferred time
+    - Timeout: 300 seconds
+    - Enabled: Yes
+
+## 4. Policy Assignment
+
+Assign the automated task to:
+- All Windows clients with WFBS installed
+- Workstation policies (exclude servers if not applicable)
+
+# Troubleshooting
+## Common Issues
+
+Script returns "Unknown" values:
+- Verify administrative privileges
+- Check if WFBS is properly installed
+- Run with -Debug parameter for detailed information
+
+Signature age shows -1:
+- Registry paths may differ for older WFBS versions
+- Check Windows Event Log for WFBS update errors
+- Verify WFBS can connect to update servers
+
+Services not detected:
+- Ensure WFBS services are installed and started
+- Check Windows Services console for service status
+- Verify WFBS installation integrity
+
+# Debug Mode
+
+Run the script with -Debug parameter to get detailed information about:
+- Registry path accessibility
+- Service enumeration
+- Date parsing results
+
+# Contributing
+
+Contributions are welcome! Please ensure:
+- Follow PowerShell best practices
+- Test on multiple WFBS versions
+- Update documentation for new features
+- Maintain backward compatibility
+
+# License
+
+This project is licensed under the GNU General Public License v3.0 - see the LICENSE file for details.
+
+# Author
+somnium78 (Marc)
+- Created for TRMM Community Scripts
+- Version 1.0 - July 28, 2025
+
+# Disclaimer
+
+This software is provided "as is" without warranty of any kind. Use at your own risk. Always test in a non-production environment first.
