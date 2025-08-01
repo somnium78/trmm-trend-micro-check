@@ -83,9 +83,11 @@ function Get-RegistryValue {
         if (Test-Path $Path) {
             $Value = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
             if ($Value) {
+                Write-DebugInfo "Found registry value $Name = $($Value.$Name) at $Path" "Gray"
                 return $Value.$Name
             }
         }
+        Write-DebugInfo "Registry value $Name not found at $Path" "Yellow"
     } catch {
         Write-DebugInfo "Registry error at $Path\$Name - $($_.Exception.Message)" "Red"
     }
@@ -123,8 +125,11 @@ function Get-WFBSInfo {
     foreach ($RegPath in $RegistryPaths) {
         Write-DebugInfo "Checking registry path - $RegPath" "Gray"
 
-        # Version information
-        $Version = Get-RegistryValue -Path $RegPath -Name "Application Version"
+        # Version information - WFBS specific
+        $Version = Get-RegistryValue -Path $RegPath -Name "WFBSAgentVersion"
+        if (-not $Version) {
+            $Version = Get-RegistryValue -Path $RegPath -Name "Application Version"
+        }
         if (-not $Version) {
             $Version = Get-RegistryValue -Path $RegPath -Name "Version"
         }
@@ -133,25 +138,51 @@ function Get-WFBSInfo {
             Write-DebugInfo "Found WFBS version - $Version" "Green"
         }
 
-        # Real-time protection
+        # Real-time protection - check Enable first, then RealTimeScanOn
         $RTPath = "$RegPath\Real Time Scan Configuration"
-        $RTEnabled = Get-RegistryValue -Path $RTPath -Name "RealTimeScanOn"
+        $RTEnabled = Get-RegistryValue -Path $RTPath -Name "Enable"
+        if ($RTEnabled -eq $null) {
+            $RTEnabled = Get-RegistryValue -Path $RTPath -Name "RealTimeScanOn"
+        }
         if ($RTEnabled -ne $null -and $WFBSInfo.RealtimeProtection -eq 0) {
             $WFBSInfo.RealtimeProtection = [int]$RTEnabled
             Write-DebugInfo "WFBS Real-time protection - $RTEnabled" "Green"
         }
 
-        # Signature information
-        $SigPath = "$RegPath\Internet Settings"
-        $PatternDate = Get-RegistryValue -Path $SigPath -Name "PatternDate"
+        # Signature information from Misc. path
+        $MiscPath = "$RegPath\Misc."
+        $PatternDate = Get-RegistryValue -Path $MiscPath -Name "PatternDate"
         if ($PatternDate -and $WFBSInfo.LastUpdate -eq "Unknown") {
+            Write-DebugInfo "Found PatternDate in Misc - $PatternDate" "Green"
             try {
-                $ParsedDate = [DateTime]::ParseExact($PatternDate, "yyyyMMdd", $null)
-                $WFBSInfo.LastUpdate = $ParsedDate.ToString("yyyy-MM-dd")
-                $WFBSInfo.SignatureAge = [math]::Floor((Get-Date - $ParsedDate).TotalDays)
-                Write-DebugInfo "WFBS signature date - $($WFBSInfo.LastUpdate) (Age: $($WFBSInfo.SignatureAge) days)" "Green"
+                if ($PatternDate -match '^\d{8}$') {
+                    # Format: YYYYMMDD
+                    $ParsedDate = [DateTime]::ParseExact($PatternDate, "yyyyMMdd", $null)
+                    $WFBSInfo.LastUpdate = $ParsedDate.ToString("yyyy-MM-dd")
+                    $WFBSInfo.SignatureAge = [math]::Round((Get-Date - $ParsedDate).TotalDays, 1)
+                    Write-DebugInfo "WFBS signature date - $($WFBSInfo.LastUpdate) (Age: $($WFBSInfo.SignatureAge) days)" "Green"
+                }
             } catch {
                 Write-DebugInfo "Failed to parse WFBS pattern date - $PatternDate" "Yellow"
+            }
+        }
+
+        # Fallback: Try Internet Settings path
+        if ($WFBSInfo.LastUpdate -eq "Unknown") {
+            $SigPath = "$RegPath\Internet Settings"
+            $AltPatternDate = Get-RegistryValue -Path $SigPath -Name "PatternDate"
+            if ($AltPatternDate) {
+                Write-DebugInfo "Found PatternDate in Internet Settings - $AltPatternDate" "Gray"
+                try {
+                    if ($AltPatternDate -match '^\d{8}$') {
+                        $ParsedDate = [DateTime]::ParseExact($AltPatternDate, "yyyyMMdd", $null)
+                        $WFBSInfo.LastUpdate = $ParsedDate.ToString("yyyy-MM-dd")
+                        $WFBSInfo.SignatureAge = [math]::Round((Get-Date - $ParsedDate).TotalDays, 1)
+                        Write-DebugInfo "WFBS fallback signature date - $($WFBSInfo.LastUpdate) (Age: $($WFBSInfo.SignatureAge) days)" "Green"
+                    }
+                } catch {
+                    Write-DebugInfo "Failed to parse fallback pattern date - $AltPatternDate" "Yellow"
+                }
             }
         }
     }
@@ -211,7 +242,7 @@ function Get-ClientServerInfo {
             try {
                 $ParsedDate = [DateTime]::ParseExact($PatternDate, "yyyyMMdd", $null)
                 $CSInfo.LastUpdate = $ParsedDate.ToString("yyyy-MM-dd")
-                $CSInfo.SignatureAge = [math]::Floor((Get-Date - $ParsedDate).TotalDays)
+                $CSInfo.SignatureAge = [math]::Round((Get-Date - $ParsedDate).TotalDays, 1)
                 Write-DebugInfo "Client Server signature date - $($CSInfo.LastUpdate) (Age: $($CSInfo.SignatureAge) days)" "Green"
             } catch {
                 Write-DebugInfo "Failed to parse Client Server pattern date - $PatternDate" "Yellow"
@@ -222,7 +253,7 @@ function Get-ClientServerInfo {
             try {
                 $ParsedTime = [DateTime]::FromFileTime($LastUpdateTime)
                 $CSInfo.LastUpdate = $ParsedTime.ToString("yyyy-MM-dd")
-                $CSInfo.SignatureAge = [math]::Floor((Get-Date - $ParsedTime).TotalDays)
+                $CSInfo.SignatureAge = [math]::Round((Get-Date - $ParsedTime).TotalDays, 1)
                 Write-DebugInfo "Client Server last update time - $($CSInfo.LastUpdate) (Age: $($CSInfo.SignatureAge) days)" "Green"
             } catch {
                 Write-DebugInfo "Failed to parse Client Server last update time - $LastUpdateTime" "Yellow"
@@ -238,7 +269,7 @@ function Determine-HealthStatus {
         [bool]$Installed,
         [bool]$ServiceRunning,
         [bool]$RealtimeProtection,
-        [int]$SignatureAge
+        [double]$SignatureAge
     )
 
     if (-not $Installed) {
