@@ -1,27 +1,29 @@
 <#
 .SYNOPSIS
-    Monitors Trend Micro Worry-Free Business Security Agent status for TRMM integration.
+    Monitors Trend Micro Security Agent status for TRMM integration (Universal Version).
 .DESCRIPTION
     This script checks the installation status, service health, signature age, and real-time protection
-    status of Trend Micro WFBS Agent. It outputs a single JSON string for TRMM custom field storage.
+    status of Trend Micro Security Agents. It supports both WFBS Agent and Client Server Security Agent.
+    It outputs a single JSON string for TRMM custom field storage.
     The script is designed to be non-invasive and safe for production use.
 .PARAMETER Debug
     Enable debug output showing detailed service information.
 .AUTHOR
     somnium78
 .DATE
-    July 28, 2025
+    August 01, 2025
 .VERSION
-    1.0
+    2.0 (Universal)
 .EXAMPLE
-    .\Win_TrendMicro_WFBS_Status_Check.ps1
-    This command checks the Trend Micro WFBS status and outputs JSON for TRMM custom field.
+    .\Win_TrendMicro_Universal_Status_Check.ps1
+    This command checks the Trend Micro status and outputs JSON for TRMM custom field.
 .EXAMPLE
-    .\Win_TrendMicro_WFBS_Status_Check.ps1 -Debug
+    .\Win_TrendMicro_Universal_Status_Check.ps1 -Debug
     This command runs the check with debug output enabled.
 .NOTES
     - Requires administrative privileges for registry access
-    - Compatible with Trend Micro WFBS Agent 20.0 and later
+    - Compatible with Trend Micro WFBS Agent and Client Server Security Agent
+    - Auto-detects installation type and uses appropriate paths/registry keys
     - Outputs single JSON string for TRMM Collector Task compatibility
     - Handles German Windows localization issues with DateTime parsing
     - Safe for production use - read-only operations only
@@ -30,10 +32,11 @@
     - health_status: OK/REALTIME_DISABLED/SERVICE_STOPPED/OUTDATED_SIGNATURES/WARNING/NOT_INSTALLED/ERROR
     - installed: 1 if installed, 0 if not
     - service_running: 1 if services running, 0 if not  
-    - version: WFBS version string or "Unknown"
+    - version: Version string or "Unknown"
     - signature_age: Age of signatures in days (decimal) or -1 if unknown
     - last_update: Last signature update date (YYYY-MM-DD) or "Unknown"
     - realtime_protection: 1 if enabled, 0 if disabled
+    - product_type: "WFBS" or "Client_Server" or "Unknown"
 #>
 
 param(
@@ -50,46 +53,107 @@ try {
         last_update = "Unknown"
         signature_age = -1
         realtime_protection = 0
+        product_type = "Unknown"
     }
 
     if ($Debug) {
-        Write-Host "Starting Trend Micro WFBS status check..." -ForegroundColor Green
+        Write-Host "Starting Trend Micro Universal status check..." -ForegroundColor Green
     }
 
-    # Check if Trend Micro is installed
-    $TrendMicroPath = "C:\Program Files (x86)\Trend Micro\Security Agent"
-    $TrendMicroPath64 = "C:\Program Files\Trend Micro\Security Agent"
+    # Define installation paths for different Trend Micro products
+    $InstallPaths = @(
+        @{
+            Path32 = "C:\Program Files (x86)\Trend Micro\Security Agent"
+            Path64 = "C:\Program Files\Trend Micro\Security Agent"
+            Type = "WFBS"
+        },
+        @{
+            Path32 = "C:\Program Files (x86)\Trend Micro\Client Server Security Agent"
+            Path64 = "C:\Program Files\Trend Micro\Client Server Security Agent"
+            Type = "Client_Server"
+        }
+    )
 
+    # Check for Trend Micro installation
     $InstallPath = $null
-    if (Test-Path $TrendMicroPath) {
-        $InstallPath = $TrendMicroPath
-        $Status.installed = 1
-        if ($Debug) { Write-Host "Found Trend Micro at: $TrendMicroPath" -ForegroundColor Yellow }
-    } elseif (Test-Path $TrendMicroPath64) {
-        $InstallPath = $TrendMicroPath64
-        $Status.installed = 1
-        if ($Debug) { Write-Host "Found Trend Micro at: $TrendMicroPath64" -ForegroundColor Yellow }
-    } else {
-        if ($Debug) { Write-Host "Trend Micro not found in standard paths" -ForegroundColor Red }
+    $ProductType = "Unknown"
+
+    foreach ($PathConfig in $InstallPaths) {
+        if (Test-Path $PathConfig.Path32) {
+            $InstallPath = $PathConfig.Path32
+            $ProductType = $PathConfig.Type
+            $Status.installed = 1
+            $Status.product_type = $ProductType
+            if ($Debug) { Write-Host "Found Trend Micro $ProductType at: $($PathConfig.Path32)" -ForegroundColor Yellow }
+            break
+        } elseif (Test-Path $PathConfig.Path64) {
+            $InstallPath = $PathConfig.Path64
+            $ProductType = $PathConfig.Type
+            $Status.installed = 1
+            $Status.product_type = $ProductType
+            if ($Debug) { Write-Host "Found Trend Micro $ProductType at: $($PathConfig.Path64)" -ForegroundColor Yellow }
+            break
+        }
+    }
+
+    if ($Status.installed -eq 0) {
+        if ($Debug) { Write-Host "Trend Micro not found in any standard paths" -ForegroundColor Red }
     }
 
     if ($Status.installed -eq 1) {
-        # Get version information
+        # Get version information based on product type
         try {
-            $VersionReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\TrendMicro\PC-cillinNTCorp\CurrentVersion" -ErrorAction SilentlyContinue
-            if (!$VersionReg) {
-                $VersionReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\TrendMicro\PC-cillinNTCorp\CurrentVersion" -ErrorAction SilentlyContinue
+            $VersionFound = $false
+
+            if ($ProductType -eq "WFBS") {
+                # WFBS version detection
+                $VersionReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\TrendMicro\PC-cillinNTCorp\CurrentVersion" -ErrorAction SilentlyContinue
+                if (!$VersionReg) {
+                    $VersionReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\TrendMicro\PC-cillinNTCorp\CurrentVersion" -ErrorAction SilentlyContinue
+                }
+
+                if ($VersionReg -and $VersionReg.Version) {
+                    $Status.version = $VersionReg.Version
+                    $VersionFound = $true
+                    if ($Debug) { Write-Host "WFBS Version: $($Status.version)" -ForegroundColor Yellow }
+                }
+            } elseif ($ProductType -eq "Client_Server") {
+                # Client Server version detection - try multiple sources
+                $PVersionReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\TrendMicro\PC-cillinNTCorp\CurrentVersion\Misc." -ErrorAction SilentlyContinue
+                if (!$PVersionReg) {
+                    $PVersionReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\TrendMicro\PC-cillinNTCorp\CurrentVersion\Misc." -ErrorAction SilentlyContinue
+                }
+
+                $AVersionReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\TrendMicro\PC-cillinNTCorp\CurrentVersion\HostedAgent" -ErrorAction SilentlyContinue
+                if (!$AVersionReg) {
+                    $AVersionReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\TrendMicro\PC-cillinNTCorp\CurrentVersion\HostedAgent" -ErrorAction SilentlyContinue
+                }
+
+                # Combine program and agent versions
+                $VersionParts = @()
+                if ($PVersionReg -and $PVersionReg.ProgramVer) {
+                    $VersionParts += "Program:$($PVersionReg.ProgramVer)"
+                    if ($Debug) { Write-Host "Program Version: $($PVersionReg.ProgramVer)" -ForegroundColor Yellow }
+                }
+                if ($AVersionReg -and $AVersionReg.Version) {
+                    $VersionParts += "Agent:$($AVersionReg.Version)"
+                    if ($Debug) { Write-Host "Agent Version: $($AVersionReg.Version)" -ForegroundColor Yellow }
+                }
+
+                if ($VersionParts.Count -gt 0) {
+                    $Status.version = $VersionParts -join " | "
+                    $VersionFound = $true
+                }
             }
 
-            if ($VersionReg -and $VersionReg.Version) {
-                $Status.version = $VersionReg.Version
-                if ($Debug) { Write-Host "Version: $($Status.version)" -ForegroundColor Yellow }
+            if (!$VersionFound -and $Debug) {
+                Write-Host "Version detection failed for product type: $ProductType" -ForegroundColor Red
             }
         } catch {
             if ($Debug) { Write-Host "Version detection failed: $($_.Exception.Message)" -ForegroundColor Red }
         }
 
-        # Check critical services
+        # Check critical services (same for both products)
         $Services = @("TMBMServer", "TmListen", "ntrtscan", "tmlisten")
         $RunningServices = 0
 
@@ -109,14 +173,25 @@ try {
 
         if ($Debug) { Write-Host "Running services: $RunningServices/$($Services.Count)" -ForegroundColor Yellow }
 
-        # Check real-time protection status
+        # Check real-time protection status (different registry keys)
         try {
             $RealtimeReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\TrendMicro\PC-cillinNTCorp\CurrentVersion\Real Time Scan Configuration" -ErrorAction SilentlyContinue
             if (!$RealtimeReg) {
                 $RealtimeReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\TrendMicro\PC-cillinNTCorp\CurrentVersion\Real Time Scan Configuration" -ErrorAction SilentlyContinue
             }
 
-            if ($RealtimeReg -and $RealtimeReg.RealTimeScanOn -eq 1) {
+            $RealtimeEnabled = $false
+
+            if ($RealtimeReg) {
+                # Check different registry values based on product type
+                if ($ProductType -eq "WFBS" -and $RealtimeReg.RealTimeScanOn -eq 1) {
+                    $RealtimeEnabled = $true
+                } elseif ($ProductType -eq "Client_Server" -and $RealtimeReg.Enable -eq 1) {
+                    $RealtimeEnabled = $true
+                }
+            }
+
+            if ($RealtimeEnabled) {
                 $Status.realtime_protection = 1
                 if ($Debug) { Write-Host "Real-time protection: Enabled" -ForegroundColor Green }
             } else {
@@ -126,11 +201,20 @@ try {
             if ($Debug) { Write-Host "Real-time protection check failed: $($_.Exception.Message)" -ForegroundColor Red }
         }
 
-        # Get signature information
+        # Get signature information (different paths for different products)
         try {
-            $PatternReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\TrendMicro\PC-cillinNTCorp\CurrentVersion\Internet Settings" -ErrorAction SilentlyContinue
-            if (!$PatternReg) {
-                $PatternReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\TrendMicro\PC-cillinNTCorp\CurrentVersion\Internet Settings" -ErrorAction SilentlyContinue
+            $PatternReg = $null
+
+            if ($ProductType -eq "WFBS") {
+                $PatternReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\TrendMicro\PC-cillinNTCorp\CurrentVersion\Internet Settings" -ErrorAction SilentlyContinue
+                if (!$PatternReg) {
+                    $PatternReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\TrendMicro\PC-cillinNTCorp\CurrentVersion\Internet Settings" -ErrorAction SilentlyContinue
+                }
+            } elseif ($ProductType -eq "Client_Server") {
+                $PatternReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\TrendMicro\PC-cillinNTCorp\CurrentVersion\Misc." -ErrorAction SilentlyContinue
+                if (!$PatternReg) {
+                    $PatternReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\TrendMicro\PC-cillinNTCorp\CurrentVersion\Misc." -ErrorAction SilentlyContinue
+                }
             }
 
             if ($PatternReg) {
@@ -162,7 +246,7 @@ try {
             if ($Debug) { Write-Host "Signature information check failed: $($_.Exception.Message)" -ForegroundColor Red }
         }
 
-        # Determine overall health status
+        # Determine overall health status (same logic for both products)
         if ($Status.service_running -eq 1 -and $Status.realtime_protection -eq 1 -and $Status.signature_age -le 7) {
             $Status.health_status = "OK"
         } elseif ($Status.service_running -eq 1 -and $Status.realtime_protection -eq 0) {
@@ -182,6 +266,7 @@ try {
 
     if ($Debug) {
         Write-Host "Final health status: $($Status.health_status)" -ForegroundColor Cyan
+        Write-Host "Product type: $($Status.product_type)" -ForegroundColor Cyan
         Write-Host "Status object:" -ForegroundColor Cyan
         $Status | ConvertTo-Json | Write-Host
     }
@@ -200,6 +285,7 @@ try {
         last_update = "Unknown"
         signature_age = -1
         realtime_protection = 0
+        product_type = "Unknown"
         error = $_.Exception.Message
     }
 
