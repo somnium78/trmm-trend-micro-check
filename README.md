@@ -18,8 +18,9 @@ All releases are now available at:
 ## ℹ️ Migration Notice
 
 - **Date:** 2025-09-07
-- **Reason:** Moving to self-hosted infrastructure  
+- **Reason:** Moving to self-hosted infrastructure
 - **Status:** This GitHub repository is now archived and read-only
+- **Content:** All original content and releases have been moved to Forgejo
 
 ## 🆘 Support
 
@@ -28,4 +29,4 @@ For issues, questions, or contributions, please visit the new repository:
 
 ---
 
-*This repository will remain available for historical reference but will not receive updates.*
+*This repository serves only as a redirect. All development happens on Forgejo.*
